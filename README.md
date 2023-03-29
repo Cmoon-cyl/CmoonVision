@@ -19,53 +19,53 @@ python -m pip install -r requirements.txt
 
 ```bash
 #默认参数（按q停止）
-python CmoonVision
+python CmoonVision.py
 #设定模型参数
-python CmoonVision --task detect --weights weights/yolov8s.pt --imgsz 640 --conf 0.8 --iou 0.7
+python CmoonVision.py --task detect --weights weights/yolov8s.pt --imgsz 640 --conf 0.8 --iou 0.7
 #只检测指定物体(例:只检测瓶子和人)
-python CmoonVision --task detect --classes=bottle,person
+python CmoonVision.py --task detect --classes=bottle,person
 #寻找物体（检测到指定物体停止）
-python CmoonVision --task detect --find bottle
+python CmoonVision.py --task detect --find bottle
 #只关注出现在roi区域中的物体(例:只检测出现在画面左半边的物体(0.0 0.5表示宽度范围,0.0 1.0表示高度范围))
-python CmoonVision --task detect --find bottle --roi 0.0 0.5 0.0 1.0
+python CmoonVision.py --task detect --find bottle --roi 0.0 0.5 0.0 1.0
 #使用电脑摄像头(source=cam或0)
-python CmoonVision --task detect --source cam
+python CmoonVision.py --task detect --source cam
 #使用本地图片或视频(source为图片或视频路径)
-python CmoonVision --task detect --source sources/image1.jpg
+python CmoonVision.py --task detect --source sources/image1.jpg
 #不保存或不显示
-python CmoonVision --nosave --noshow
+python CmoonVision.py --nosave --noshow
 ```
 
 #### 实例分割
 
 ```bash
 #默认参数（按q停止）
-python CmoonVision --task segment --weights weights/yolov8s-seg.pt
+python CmoonVision.py --task segment --weights weights/yolov8s-seg.pt
 #设定模型参数
-python CmoonVision --task segment --weights weights/yolov8s-seg.pt --imgsz 640 --conf 0.8 --iou 0.7
+python CmoonVision.py --task segment --weights weights/yolov8s-seg.pt --imgsz 640 --conf 0.8 --iou 0.7
 #只检测指定物体(例:只检测瓶子和人)
-python CmoonVision --task segment --weights weights/yolov8s-seg.pt --classes=bottle,person
+python CmoonVision.py --task segment --weights weights/yolov8s-seg.pt --classes=bottle,person
 #寻找物体（检测到指定物体停止）
-python CmoonVision --task segment --weights weights/yolov8s-seg.pt --find bottle
+python CmoonVision.py --task segment --weights weights/yolov8s-seg.pt --find bottle
 #只关注出现在roi区域中的物体(例:只检测出现在画面左半边的物体(0.0 0.5表示宽度范围,0.0 1.0表示高度范围))
-python CmoonVision --task segment --weights weights/yolov8s-seg.pt --find bottle --roi 0.0 0.5 0.0 1.0
+python CmoonVision.py --task segment --weights weights/yolov8s-seg.pt --find bottle --roi 0.0 0.5 0.0 1.0
 #使用电脑摄像头(source=cam或0或不传)
-python CmoonVision --task segment --weights weights/yolov8s-seg.pt --source cam
+python CmoonVision.py --task segment --weights weights/yolov8s-seg.pt --source cam
 #使用本地图片或视频(source为图片或视频路径)
-python CmoonVision --task segment --weights weights/yolov8s-seg.pt --source sources/image1.jpg
+python CmoonVision.py --task segment --weights weights/yolov8s-seg.pt --source sources/image1.jpg
 ```
 
 #### 图片分类
 
 ```bash
 #默认参数（按q停止）
-python CmoonVision --task classify --weights weights/yolov8s-cls.pt
+python CmoonVision.py --task classify --weights weights/yolov8s-cls.pt
 #寻找物体（检测到概率最高是指定类别停止）
-python CmoonVision --task classify --weights weights/yolov8s-cls.pt --find water_bottle
+python CmoonVision.py --task classify --weights weights/yolov8s-cls.pt --find water_bottle
 #使用电脑摄像头(source=cam或0)
-python CmoonVision --task classify --weights weights/yolov8s-cls.pt --source cam
+python CmoonVision.py --task classify --weights weights/yolov8s-cls.pt --source cam
 #使用本地图片或视频(source为图片或视频路径)
-python CmoonVision --task classify --weights weights/yolov8s-cls.pt --source sources/image1.jpg
+python CmoonVision.py --task classify --weights weights/yolov8s-cls.pt --source sources/image1.jpg
 ```
 
 #### 所有可选参数
