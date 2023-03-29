@@ -86,9 +86,6 @@ class Utils:
         :return:bool
         """
         roi_range, _ = Utils.calc_roi(size, roi)
-        print(f'roirange:{roi_range},point:{point}')
-        print(
-            f'size:{size},bool:{roi_range[0] <= point[0] <= roi_range[1] and roi_range[2] <= point[1] <= roi_range[3]}')
         return roi_range[0] <= point[0] <= roi_range[1] and roi_range[2] <= point[1] <= roi_range[3]
 
 
