@@ -37,7 +37,6 @@ class YoloBase(metaclass=ABCMeta):
 
     def judge_results(self, results) -> bool:
         items = {item.name: item.center for item in results}
-        print(len(results))
         size = results[0].img0.shape[1::-1]
         flag = self.find in items and Utils.in_roi(items[self.find], size, self.roi) if self.find else cv2.waitKey(
             1) & 0xFF == ord('q')
@@ -92,7 +91,7 @@ class YoloDet(YoloBase):
                 self.results = []
                 img0 = result.orig_img
                 size = img0.shape[1::-1]
-                if result is not None:
+                if len(result):
                     for data in result.boxes.data.tolist():
                         name = result.names[int(data[5])]
                         box = list(map(int, data[:4]))
@@ -131,7 +130,7 @@ class YoloSeg(YoloBase):
                 self.results = []
                 img0 = result.orig_img
                 size = img0.shape[1::-1]
-                if len(result.boxes):
+                if len(result):
                     for data, _mask in zip(result.boxes.data.tolist(), result.masks.data.cpu().numpy()):
                         name = result.names[int(data[5])]
                         box = list(map(int, data[:4]))
@@ -184,14 +183,14 @@ class YoloCls(YoloBase):
                     indices = indices.tolist()
                     names = [result.names[index] for index in indices]
                     img0 = result.orig_img
-                    if not self.noshow:
-                        img_plot = result.plot()
-                        Utils.show_stream('result', img_plot)
                     self.results.append(ClsResult(list(zip(names, probs)), img0))
                     print(self.results[-1])
                     print('-------------------------')
-                    if self.judge_results(self.results):
-                        break
+                if not self.noshow:
+                    img_plot = result.plot()
+                    Utils.show_stream('result', img_plot)
+                if self.judge_results(self.results):
+                    break
         except KeyboardInterrupt:
             print('Stop Manually!')
         finally:
