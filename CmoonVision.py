@@ -394,7 +394,6 @@ def main():
     opt = parser.parse_args()
 
     detector = CmoonVision(task=opt.task, weights=opt.weights, imgsz=opt.imgsz, conf_thres=opt.conf, iou_thres=opt.iou)
-    print(detector.model.names)
     results = detector.predict(source=opt.source, find=opt.find, classes=opt.classes, roi=opt.roi, nosave=opt.nosave,
                                noshow=opt.noshow, track=opt.track)
     for result in results:
