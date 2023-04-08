@@ -3,6 +3,7 @@
 
 # Base ----------------------------------------
 ultralytics>=8.0.70
+pykinect_azure
 matplotlib>=3.2.2
 numpy>=1.21.6
 opencv-python>=4.6.0
