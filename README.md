@@ -49,6 +49,8 @@ python CmoonVision.py --task detect --find bottle
 python CmoonVision.py --task detect --find bottle --roi 0.0 0.5 0.0 1.0
 #使用电脑摄像头(source=cam或0)
 python CmoonVision.py --task detect --source cam
+#使用kinect(source=kinect或k4a)
+python CmoonVision.py --task detect --source k4a
 #使用本地图片或视频(source为图片或视频路径)
 python CmoonVision.py --task detect --source sources/image1.jpg
 #使用track计数
