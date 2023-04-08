@@ -75,9 +75,8 @@ class Utils:
         roi_point = [[int(roi_range[0]), int(roi_range[2])], [int(roi_range[1]), int(roi_range[3])]]
         return roi_range, roi_point
 
-
     @staticmethod
-    def in_roi(point: List[int], size: List[int], roi: List[float]) -> bool:
+    def in_roi(point: List[int], size: List[int], roi: Sequence[float]) -> bool:
         """
         判断物品中心点是否在设定的画面范围内
 
@@ -98,17 +97,19 @@ class DetResult:
     :param center: 矩形框中心点坐标
     :param conf: 置信度
     :param img0: 原图
+    :param id: 第几个物体（track时启用）
     """
 
-    def __init__(self, name: str, box: List[int], center: List[int], conf: float, img0: np.ndarray):
+    def __init__(self, name: str, box: List[int], center: List[int], conf: float, img0: np.ndarray, id: int = None):
         self.name = name
         self.box = box
         self.center = center
         self.conf = conf
         self.img0 = img0
+        self.id = id
 
     def __str__(self):
-        return f'name:{self.name}; box:{self.box}; conf:{self.conf:.2f}'
+        return f'name:{self.name}; box:{self.box}; conf:{self.conf:.2f}; id:{self.id}' if self.id else f'name:{self.name}; box:{self.box}; conf:{self.conf:.2f}'
 
     def __repr__(self):
         return self.__str__()
@@ -128,10 +129,11 @@ class SegResult:
        :param conf: 置信度
        :param img0: 原图
        :param mask: 分割结果mask
-       """
+       :param id: 第几个物体（track时启用）
+    """
 
     def __init__(self, name: str, box: List[int], center: List[int], conf: float, img0: np.ndarray,
-                 mask: np.ndarray = None):
+                 mask: np.ndarray, id: int = None):
         self.name = name
         self.box = box
         self.center = center
@@ -139,9 +141,10 @@ class SegResult:
         self.img0 = img0
         self.mask = mask
         self.img_mask = Utils.plot_masks(self.img0, self.mask)
+        self.id = id
 
     def __str__(self):
-        return f'name:{self.name}; box:{self.box}; conf:{self.conf:.2f}'
+        return f'name:{self.name}; box:{self.box}; conf:{self.conf:.2f}; id:{self.id}' if self.id else f'name:{self.name}; box:{self.box}; conf:{self.conf:.2f}'
 
     def __repr__(self):
         return self.__str__()
@@ -173,3 +176,29 @@ class ClsResult:
     def __getattr__(self, attr):
         name = self.__class__.__name__
         raise AttributeError(f"'{name}' object has no attribute '{attr}'. See valid attributes below.\n{self.__doc__}")
+
+
+class PoseResult:
+    """
+       图像分类检测结果数据类型
+
+       :param box： 矩形框左上右下xyxy坐标
+       :param joints: 关节点
+       :param img0: 原图
+       """
+
+    def __init__(self, box: List[int], joints: List, img0: np.ndarray):
+        self.box = box
+        self.joints = joints
+        self.img0 = img0
+
+    def __str__(self):
+        return f'box：{self.box}'
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __getattr__(self, attr):
+        name = self.__class__.__name__
+        raise AttributeError(
+            f"'{name}' object has no attribute '{attr}'. See valid attributes below.\n{self.__doc__}")

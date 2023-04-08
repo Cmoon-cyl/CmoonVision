@@ -10,12 +10,13 @@ import cv2
 import numpy as np
 import torch
 from ultralytics import YOLO
-from cmoon_utils import DetResult, SegResult, ClsResult, Utils
+from cmoon_utils import DetResult, SegResult, ClsResult, PoseResult, Utils
 from abc import ABCMeta, abstractmethod
 
 
-# Yolo基类
 class YoloBase(metaclass=ABCMeta):
+    """Yolo抽象基类"""
+
     def __init__(self, weights: str, imgsz: int = 640,
                  conf_thres: float = 0.25, iou_thres: float = 0.7):
         self.weights = weights
@@ -42,41 +43,9 @@ class YoloBase(metaclass=ABCMeta):
             1) & 0xFF == ord('q')
         return flag
 
-    def predict(self, source: Any, classes: str = None, find: str = None, roi: Sequence = (0.0, 1.0, 0.0, 1.0),
-                nosave: bool = False, noshow: bool = False) -> list:
-        """
-            模型推理
-
-            :param source: 图片来源:cv2读取的图片(np.ndarray)/电脑摄像头('cam','0',0)/本地文件(str)
-            :param classes: 哪些物体可以被检测到,字符串名称间用','分割('bottle,person')
-            :param find: 需要寻找的物体名称('bottle')
-            :param roi: 画面中心多大范围内的检测结果被采用([0.0,0.5,0.0,1.0])
-            :param nosave 不保存结果到runs文件夹
-            :param noshow 不显示结果
-            :return: list 根据任务类型返回对应自定义消息类型
-        """
-        self.find = find
-        self.roi = roi
-        self.noshow = noshow
-        if classes is not None:
-            classes = [list(self.names.values()).index(name) for name in classes.split(',')]
-        if type(source) == np.ndarray:
-            results = self.model.predict(source=source, stream=False, imgsz=self.imgsz, conf=self.conf_thres,
-                                         iou=self.iou_thres, classes=classes, save=not nosave, show=False)
-        elif source in ['cam', '0', 0]:
-            results = self.model.predict(source=0, stream=True, imgsz=self.imgsz, conf=self.conf_thres,
-                                         iou=self.iou_thres, classes=classes, save=not nosave, show=False)
-        elif source.split('.')[-1] == 'mp4':
-            results = self.model.predict(source=source, stream=True, imgsz=self.imgsz, conf=self.conf_thres,
-                                         iou=self.iou_thres, classes=classes, save=not nosave, show=False)
-        elif source.split('.')[-1] in ['jpg', 'jpeg', 'png']:
-            results = self.model.predict(source=source, stream=False, imgsz=self.imgsz, conf=self.conf_thres,
-                                         iou=self.iou_thres, classes=classes, save=not nosave, show=False)
-        else:
-            raise NotImplementedError('Unsupported Source! ')
-        self.process_results(results)
-        print('Detection Finished')
-        return self.results
+    @abstractmethod
+    def predict(self, source: Any) -> list:
+        raise NotImplementedError
 
 
 # YoloDet 子类
@@ -84,6 +53,7 @@ class YoloDet(YoloBase):
     def __init__(self, weights: str = Path(Path.cwd(), "weights", 'yolov8s.pt'), imgsz: int = 640,
                  conf_thres: float = 0.25, iou_thres: float = 0.7):
         super().__init__(weights, imgsz, conf_thres, iou_thres)
+        self.track = False
 
     def process_results(self, results):
         try:
@@ -93,12 +63,13 @@ class YoloDet(YoloBase):
                 size = img0.shape[1::-1]
                 if len(result):
                     for data in result.boxes.data.tolist():
-                        name = result.names[int(data[5])]
+                        name = result.names[int(data[-1])]
                         box = list(map(int, data[:4]))
                         center = Utils.xyxy2cnt(box)
-                        conf = data[4]
+                        conf = data[-2]
+                        id = int(data[-3]) if self.track else None
                         if Utils.in_roi(center, size, self.roi):
-                            self.results.append(DetResult(name, box, center, conf, img0))
+                            self.results.append(DetResult(name, box, center, conf, img0, id))
                             if not self.noshow:
                                 cv2.circle(img0, center, 3, (0, 0, 255), -1)
                             print(self.results[-1])
@@ -117,12 +88,66 @@ class YoloDet(YoloBase):
         finally:
             cv2.destroyAllWindows()
 
+    def predict(self, source: Any, classes: str = None, find: str = None, roi: Sequence = (0.0, 1.0, 0.0, 1.0),
+                nosave: bool = False, noshow: bool = False, track: bool = False) -> list:
+        """
+            模型推理
+
+            :param source: 图片来源:cv2读取的图片(np.ndarray)/电脑摄像头('cam','0',0)/本地文件(str)
+            :param classes: 哪些物体可以被检测到,字符串名称间用','分割('bottle,person')
+            :param find: 需要寻找的物体名称('bottle')
+            :param roi: 画面中心多大范围内的检测结果被采用([0.0,0.5,0.0,1.0])
+            :param nosave 不保存结果到runs文件夹
+            :param noshow 不显示结果
+            :param track 使用track计数
+            :return: list 根据任务类型返回对应自定义消息类型
+        """
+        self.find = find
+        self.roi = roi
+        self.track = track
+        self.noshow = noshow
+        if classes is not None:
+            classes = [list(self.names.values()).index(name) for name in classes.split(',')]
+        if type(source) == np.ndarray:
+            if self.track:
+                results = self.model.track(source=source, stream=False, imgsz=self.imgsz, conf=self.conf_thres,
+                                           iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+            else:
+                results = self.model(source=source, stream=False, imgsz=self.imgsz, conf=self.conf_thres,
+                                     iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+        elif source in ['cam', '0', 0]:
+            if self.track:
+                results = self.model.track(source=0, stream=True, imgsz=self.imgsz, conf=self.conf_thres,
+                                           iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+            else:
+                results = self.model(source=0, stream=True, imgsz=self.imgsz, conf=self.conf_thres,
+                                     iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+        elif source.split('.')[-1] in ['avi', 'mp4', 'gif', 'mkv', 'mov', 'webm']:
+            if self.track:
+                results = self.model.track(source=source, stream=True, imgsz=self.imgsz, conf=self.conf_thres,
+                                           iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+            else:
+                results = self.model(source=source, stream=True, imgsz=self.imgsz, conf=self.conf_thres,
+                                     iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+        elif source.split('.')[-1] in ['jpg', 'jpeg', 'png', 'bmp']:
+            results = self.model(source=source, stream=False, imgsz=self.imgsz, conf=self.conf_thres,
+                                 iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+        else:
+            raise NotImplementedError('Unsupported Source! ')
+        self.process_results(results)
+        print('Detection Finished')
+        return self.results
+
+    def __call__(self, *args, **kwargs):
+        return self.predict(*args, **kwargs)
+
 
 # YoloSeg 子类
 class YoloSeg(YoloBase):
     def __init__(self, weights: str = Path(Path.cwd(), "weights", 'yolov8s-seg.pt'), imgsz: int = 640,
                  conf_thres: float = 0.25, iou_thres: float = 0.7):
         super().__init__(weights, imgsz, conf_thres, iou_thres)
+        self.track = False
 
     def process_results(self, results):
         try:
@@ -132,17 +157,18 @@ class YoloSeg(YoloBase):
                 size = img0.shape[1::-1]
                 if len(result):
                     for data, _mask in zip(result.boxes.data.tolist(), result.masks.data.cpu().numpy()):
-                        name = result.names[int(data[5])]
+                        name = result.names[int(data[-1])]
                         box = list(map(int, data[:4]))
                         center = Utils.xyxy2cnt(box)
-                        conf = data[4]
+                        conf = data[-2]
                         maxValue = _mask.max()
                         _mask = _mask * 255 / maxValue
                         _mask = np.uint8(_mask)
                         _mask = cv2.resize(_mask, [img0.shape[1], img0.shape[0]])
                         ret, mask = cv2.threshold(_mask, 127, 255, cv2.THRESH_BINARY)
-                        self.results.append(SegResult(name, box, center, conf, img0, mask))
+                        id = int(data[-3]) if self.track else None
                         if Utils.in_roi(center, size, self.roi):
+                            self.results.append(SegResult(name, box, center, conf, img0, mask, id))
                             if not self.noshow:
                                 cv2.circle(img0, center, 3, (0, 0, 255), -1)
                             print(self.results[-1])
@@ -160,6 +186,47 @@ class YoloSeg(YoloBase):
             print('Stop Manually!')
         finally:
             cv2.destroyAllWindows()
+
+    def predict(self, source: Any, classes: str = None, find: str = None, roi: Sequence = (0.0, 1.0, 0.0, 1.0),
+                nosave: bool = False, noshow: bool = False, track: bool = False) -> list:
+        self.find = find
+        self.roi = roi
+        self.track = track
+        self.noshow = noshow
+        if classes is not None:
+            classes = [list(self.names.values()).index(name) for name in classes.split(',')]
+        if type(source) == np.ndarray:
+            if self.track:
+                results = self.model.track(source=source, stream=False, imgsz=self.imgsz, conf=self.conf_thres,
+                                           iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+            else:
+                results = self.model(source=source, stream=False, imgsz=self.imgsz, conf=self.conf_thres,
+                                     iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+        elif source in ['cam', '0', 0]:
+            if self.track:
+                results = self.model.track(source=0, stream=True, imgsz=self.imgsz, conf=self.conf_thres,
+                                           iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+            else:
+                results = self.model(source=0, stream=True, imgsz=self.imgsz, conf=self.conf_thres,
+                                     iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+        elif source.split('.')[-1] in ['avi', 'mp4', 'gif', 'mkv', 'mov', 'webm']:
+            if self.track:
+                results = self.model.track(source=source, stream=True, imgsz=self.imgsz, conf=self.conf_thres,
+                                           iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+            else:
+                results = self.model(source=source, stream=True, imgsz=self.imgsz, conf=self.conf_thres,
+                                     iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+        elif source.split('.')[-1] in ['jpg', 'jpeg', 'png', 'bmp']:
+            results = self.model(source=source, stream=False, imgsz=self.imgsz, conf=self.conf_thres,
+                                 iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+        else:
+            raise NotImplementedError('Unsupported Source! ')
+        self.process_results(results)
+        print('Detection Finished')
+        return self.results
+
+    def __call__(self, *args, **kwargs):
+        return self.predict(*args, **kwargs)
 
 
 # YoloCls 子类
@@ -196,6 +263,87 @@ class YoloCls(YoloBase):
         finally:
             cv2.destroyAllWindows()
 
+    def predict(self, source: Any, classes: str = None, find: str = None, nosave: bool = False,
+                noshow: bool = False) -> list:
+        self.find = find
+        self.noshow = noshow
+        if classes is not None:
+            classes = [list(self.names.values()).index(name) for name in classes.split(',')]
+        if type(source) == np.ndarray:
+            results = self.model(source=source, stream=False, imgsz=self.imgsz, conf=self.conf_thres,
+                                 iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+        elif source in ['cam', '0', 0]:
+            results = self.model(source=0, stream=True, imgsz=self.imgsz, conf=self.conf_thres,
+                                 iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+        elif source.split('.')[-1] in ['avi', 'mp4', 'gif', 'mkv', 'mov', 'webm']:
+            results = self.model(source=source, stream=True, imgsz=self.imgsz, conf=self.conf_thres,
+                                 iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+        elif source.split('.')[-1] in ['jpg', 'jpeg', 'png', 'bmp']:
+            results = self.model(source=source, stream=False, imgsz=self.imgsz, conf=self.conf_thres,
+                                 iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+        else:
+            raise NotImplementedError('Unsupported Source! ')
+        self.process_results(results)
+        print('Detection Finished')
+        return self.results
+
+    def __call__(self, *args, **kwargs):
+        return self.predict(*args, **kwargs)
+
+
+class YoloPose(YoloBase):
+    def __init__(self, weights: str = Path(Path.cwd(), "weights", 'yolov8n-pose.pt'), imgsz: int = 640,
+                 conf_thres: float = 0.25, iou_thres: float = 0.7):
+        super().__init__(weights, imgsz, conf_thres, iou_thres)
+
+    def process_results(self, results):
+        try:
+            for result in results:
+                self.results = []
+                img0 = result.orig_img
+                joints = result.keypoints.tolist()
+                if len(result):
+                    for data in result.boxes.data.tolist():
+                        box = list(map(int, data[:4]))
+                        self.results.append(PoseResult(box, joints, img0))
+                        print(self.results[-1])
+                if not self.noshow:
+                    img_plot = result.plot()
+                    Utils.show_stream('result', img_plot)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+        except KeyboardInterrupt:
+            print('Stop Manually!')
+        finally:
+            cv2.destroyAllWindows()
+
+    def predict(self, source: Any, classes: str = None, find: str = None, nosave: bool = False,
+                noshow: bool = False) -> list:
+        self.find = find
+        self.noshow = noshow
+        if classes is not None:
+            classes = [list(self.names.values()).index(name) for name in classes.split(',')]
+        if type(source) == np.ndarray:
+            results = self.model(source=source, stream=False, imgsz=self.imgsz, conf=self.conf_thres,
+                                 iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+        elif source in ['cam', '0', 0]:
+            results = self.model(source=0, stream=True, imgsz=self.imgsz, conf=self.conf_thres,
+                                 iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+        elif source.split('.')[-1] in ['avi', 'mp4', 'gif', 'mkv', 'mov', 'webm']:
+            results = self.model(source=source, stream=True, imgsz=self.imgsz, conf=self.conf_thres,
+                                 iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+        elif source.split('.')[-1] in ['jpg', 'jpeg', 'png', 'bmp']:
+            results = self.model(source=source, stream=False, imgsz=self.imgsz, conf=self.conf_thres,
+                                 iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+        else:
+            raise NotImplementedError('Unsupported Source! ')
+        self.process_results(results)
+        print('Detection Finished')
+        return self.results
+
+    def __call__(self, *args, **kwargs):
+        return self.predict(*args, **kwargs)
+
 
 class CmoonVision:
     """
@@ -209,11 +357,23 @@ class CmoonVision:
     """
 
     def __init__(self, task, *args, **kwargs):
-        model = {'detect': YoloDet, 'segment': YoloSeg, 'classify': YoloCls}
+        model = {'detect': YoloDet, 'segment': YoloSeg, 'classify': YoloCls, 'pose': YoloPose}
+        self.task = task
         self.model = model[task](*args, **kwargs)
 
-    def predict(self, *args, **kwargs):
-        return self.model.predict(*args, **kwargs)
+    def predict(self, source: Any, classes: str = None, find: str = None, roi: Sequence = (0.0, 1.0, 0.0, 1.0),
+                nosave: bool = False, noshow: bool = False, track: bool = False, *args, **kwargs):
+        if self.task == 'detect':
+            return self.model(source, classes, find, roi, nosave, noshow, track)
+        elif self.task == 'segment':
+            return self.model(source, classes, find, roi, nosave, noshow, track)
+        elif self.task == 'classify':
+            return self.model(source, classes, find, nosave, noshow)
+        elif self.task == 'pose':
+            return self.model(source, classes, find, nosave, noshow)
+
+    def __call__(self, *args, **kwargs):
+        return self.predict(*args, **kwargs)
 
 
 def main():
@@ -230,11 +390,13 @@ def main():
     parser.add_argument('--roi', type=float, nargs='+', default=[0.0, 1.0, 0.0, 1.0], help='roi region x x y y')
     parser.add_argument('--nosave', action='store_true', help='do not save images/videos')
     parser.add_argument('--noshow', action='store_true', help='do not show result')
+    parser.add_argument('--track', action='store_true', help='use track')
     opt = parser.parse_args()
 
     detector = CmoonVision(task=opt.task, weights=opt.weights, imgsz=opt.imgsz, conf_thres=opt.conf, iou_thres=opt.iou)
+    print(detector.model.names)
     results = detector.predict(source=opt.source, find=opt.find, classes=opt.classes, roi=opt.roi, nosave=opt.nosave,
-                               noshow=opt.noshow)
+                               noshow=opt.noshow, track=opt.track)
     for result in results:
         print(result)
 
