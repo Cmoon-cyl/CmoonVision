@@ -158,6 +158,8 @@ class YoloDet(YoloBase):
 
                     # Get the color image from the capture
                     ret, color_image = capture.get_color_image()
+                    if not ret:
+                        continue
                     if self.track:
                         results = self.model.track(source=color_image, stream=True, imgsz=self.imgsz,
                                                    conf=self.conf_thres,
