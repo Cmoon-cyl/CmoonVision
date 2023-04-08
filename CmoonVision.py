@@ -13,6 +13,8 @@ from ultralytics import YOLO
 from cmoon_utils import DetResult, SegResult, ClsResult, PoseResult, Utils
 from abc import ABCMeta, abstractmethod
 
+import pykinect_azure as pykinect
+
 
 class YoloBase(metaclass=ABCMeta):
     """Yolo抽象基类"""
@@ -54,6 +56,31 @@ class YoloDet(YoloBase):
                  conf_thres: float = 0.25, iou_thres: float = 0.7):
         super().__init__(weights, imgsz, conf_thres, iou_thres)
         self.track = False
+
+    def process(self, results):
+        for result in results:
+            self.results = []
+            img0 = result.orig_img
+            size = img0.shape[1::-1]
+            if len(result):
+                for data in result.boxes.data.tolist():
+                    name = result.names[int(data[-1])]
+                    box = list(map(int, data[:4]))
+                    center = Utils.xyxy2cnt(box)
+                    conf = data[-2]
+                    id = int(data[-3]) if self.track else None
+                    if Utils.in_roi(center, size, self.roi):
+                        self.results.append(DetResult(name, box, center, conf, img0, id))
+                        if not self.noshow:
+                            cv2.circle(img0, center, 3, (0, 0, 255), -1)
+                        print(self.results[-1])
+                        print('------------------------------------------')
+            if not self.noshow:
+                img_plot = result.plot()
+                if self.roi != [0.0, 1.0, 0.0, 1.0]:
+                    _, roi_point = Utils.calc_roi(size, self.roi)
+                    cv2.rectangle(img_plot, roi_point[0], roi_point[1], (255, 0, 0), 2)
+                Utils.show_stream('result', img_plot)
 
     def process_results(self, results):
         try:
@@ -115,6 +142,41 @@ class YoloDet(YoloBase):
             else:
                 results = self.model(source=source, stream=False, imgsz=self.imgsz, conf=self.conf_thres,
                                      iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+
+        elif source in ['kinect', 'k4a', 'stream']:
+            pykinect.initialize_libraries()
+            # Modify camera configuration
+            device_config = pykinect.default_configuration
+            device_config.color_resolution = pykinect.K4A_COLOR_RESOLUTION_1080P
+            # print(device_config)
+            # Start device
+            device = pykinect.start_device(config=device_config)
+            try:
+                while True:
+                    # Get capture
+                    capture = device.update()
+
+                    # Get the color image from the capture
+                    ret, color_image = capture.get_color_image()
+                    if self.track:
+                        results = self.model.track(source=color_image, stream=True, imgsz=self.imgsz,
+                                                   conf=self.conf_thres,
+                                                   iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+                    else:
+                        results = self.model(source=color_image, stream=True, imgsz=self.imgsz, conf=self.conf_thres,
+                                             iou=self.iou_thres, classes=classes, save=not nosave, show=False)
+                    self.process(results)
+                    if len(self.results):
+                        if self.judge_results(self.results):
+                            break
+            except KeyboardInterrupt:
+                print("Stop Manually")
+            finally:
+                cv2.destroyAllWindows()
+                device.stop_cameras()
+                device.close()
+                return self.results
+
         elif source in ['cam', '0', 0]:
             if self.track:
                 results = self.model.track(source=0, stream=True, imgsz=self.imgsz, conf=self.conf_thres,
@@ -135,7 +197,6 @@ class YoloDet(YoloBase):
         else:
             raise NotImplementedError('Unsupported Source! ')
         self.process_results(results)
-        print('Detection Finished')
         return self.results
 
     def __call__(self, *args, **kwargs):
